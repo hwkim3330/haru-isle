@@ -22,6 +22,21 @@ export interface Motion {
   done?: () => void;
 }
 
+/** A soft round shadow under every character (grounds them even when the sun is high). */
+const BLOB = (() => {
+  const c = document.createElement("canvas");
+  c.width = c.height = 64;
+  const g = c.getContext("2d")!;
+  const r = g.createRadialGradient(32, 32, 4, 32, 32, 30);
+  r.addColorStop(0, "rgba(40,50,40,0.55)");
+  r.addColorStop(1, "rgba(40,50,40,0)");
+  g.fillStyle = r;
+  g.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c);
+  return new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false });
+})();
+const BLOB_GEO = new THREE.PlaneGeometry(0.8, 0.8).rotateX(-Math.PI / 2);
+
 export class Person {
   rig: Rig;
   anim: Animator;
@@ -46,7 +61,12 @@ export class Person {
     this.rig = buildRig(look);
     this.anim = new Animator(this.rig);
     scene.add(this.rig.root);
+    this.blob = new THREE.Mesh(BLOB_GEO, BLOB);
+    this.blob.renderOrder = 2;
+    scene.add(this.blob);
   }
+
+  private blob: THREE.Mesh;
 
   setLook(look: Look): void {
     this.look = look;
@@ -165,11 +185,15 @@ export class Person {
     this.rig.root.position.copy(this.pos);
     this.rig.root.rotation.y = this.yaw;
     this.rig.root.visible = !this.hidden;
+    this.blob.visible = !this.hidden;
+    this.blob.position.set(this.pos.x, this.pos.y - this.anim.hop * 0 + 0.03, this.pos.z);
+    const s = 1 - Math.min(0.5, this.anim.hop * 2);
+    this.blob.scale.setScalar(s);
     this.anim.update(dt, this.speed, this.running);
   }
 
   dispose(): void {
-    this.scene.remove(this.rig.root);
+    this.scene.remove(this.rig.root, this.blob);
     this.tag?.remove();
   }
 }

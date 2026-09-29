@@ -353,7 +353,7 @@ export class Terrain {
           float band = sin(d * 5.0 - uTime * 1.6 + vnoise(vW.xz * 0.5) * 3.0);
           float foam = smoothstep(0.75, 0.95, band) * (1.0 - smoothstep(0.3, 1.6, d)) + (1.0 - smoothstep(0.0, 0.35, d));
           c = mix(c, vec3(1.0), clamp(foam, 0.0, 1.0) * 0.85);
-          c *= mix(1.0, 0.45, uNight);
+          c *= mix(1.0, 0.3, uNight);
           float a = mix(0.62, 0.92, smoothstep(0.2, 3.0, d));
           gl_FragColor = vec4(c, max(a, foam * 0.9));
           #include <fog_fragment>
@@ -423,7 +423,7 @@ export class Terrain {
           c += vec3(1.0) * smoothstep(0.34, 0.42, r) * 0.28;
           float edge = 1.0 - smoothstep(0.55, 0.85, wet + (vnoise(vW.xz * 4.0 + uTime) - 0.5) * 0.2);
           c = mix(c, vec3(0.92, 0.98, 1.0), edge * 0.45);
-          c *= mix(1.0, 0.45, uNight);
+          c *= mix(1.0, 0.3, uNight);
           gl_FragColor = vec4(c, 0.8 + edge * 0.15);
           #include <fog_fragment>
         }`,
@@ -452,7 +452,7 @@ export class Terrain {
           float s = vnoise(vec2(vUv.x * 14.0, vUv.y * 3.0 + uTime * 3.5));
           vec3 c = mix(vec3(0.55, 0.85, 0.95), vec3(1.0), smoothstep(0.45, 0.75, s));
           c = mix(c, vec3(1.0), smoothstep(0.75, 1.0, vUv.y) * 0.6 + smoothstep(0.25, 0.0, vUv.y) * 0.8);
-          c *= mix(1.0, 0.5, uNight);
+          c *= mix(1.0, 0.35, uNight);
           gl_FragColor = vec4(c, 0.92);
         }`,
     });

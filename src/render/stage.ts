@@ -13,13 +13,13 @@ import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 /** Distance from the camera where the ground starts to curve away, and how hard. */
 export const CURVE = { start: 16, k: 0.011 };
 
-// Every material bends through this chunk (depth materials for shadows don't: shadow lookups
-// use the unbent world position, so shadows stay glued to what casts them).
-THREE.ShaderChunk.project_vertex = THREE.ShaderChunk.project_vertex.replace(
+// Every material bends through this chunk, but only for the perspective (player) camera: the
+// sun's orthographic shadow pass stays flat, and shadow lookups use the unbent world position,
+// so shadows stay glued to what casts them.
+const NOCURVE = typeof location !== "undefined" && location.search.includes("nocurve");
+if (!NOCURVE) THREE.ShaderChunk.project_vertex = THREE.ShaderChunk.project_vertex.replace(
   "gl_Position = projectionMatrix * mvPosition;",
-  `#ifndef DEPTH_PACKING
-  { float cd = max(0.0, -mvPosition.z - ${CURVE.start.toFixed(1)}); mvPosition.y -= cd * cd * ${CURVE.k.toFixed(5)}; }
-  #endif
+  `if (projectionMatrix[3][3] < 0.5) { float cd = max(0.0, -mvPosition.z - ${CURVE.start.toFixed(1)}); mvPosition.y -= cd * cd * ${CURVE.k.toFixed(5)}; }
   gl_Position = projectionMatrix * mvPosition;`,
 );
 
@@ -95,14 +95,14 @@ interface Sky {
 const C = (h: number) => new THREE.Color(h);
 /** Key hours of the day and their light. */
 const KEYS: [number, Sky][] = [
-  [0, { top: C(0x0a1030), mid: C(0x1a2a5a), bot: C(0x2a3a6a), sun: C(0x6a80c0), sunI: 0.35, hemiSky: C(0x3a4a8a), hemiGround: C(0x1a2030), hemiI: 0.9 }],
+  [0, { top: C(0x0a1030), mid: C(0x1a2a5a), bot: C(0x2a3a6a), sun: C(0x8a9ad8), sunI: 0.7, hemiSky: C(0x5a6aa8), hemiGround: C(0x2a3040), hemiI: 1.25 }],
   [5, { top: C(0x1a2050), mid: C(0x4a4a8a), bot: C(0xc08aa0), sun: C(0xffb080), sunI: 0.6, hemiSky: C(0x6a6aa0), hemiGround: C(0x3a3040), hemiI: 1.0 }],
   [7, { top: C(0x5aa0e8), mid: C(0x9ad0f0), bot: C(0xffd8b0), sun: C(0xffe0b0), sunI: 1.9, hemiSky: C(0xbad8ff), hemiGround: C(0x8a8060), hemiI: 1.25 }],
   [12, { top: C(0x3a8ae8), mid: C(0x80c0f8), bot: C(0xd8f0ff), sun: C(0xfff6e8), sunI: 2.5, hemiSky: C(0xd0e8ff), hemiGround: C(0x90a070), hemiI: 1.35 }],
   [16, { top: C(0x4a90e0), mid: C(0x90c8f0), bot: C(0xffe8c8), sun: C(0xffe8c0), sunI: 2.2, hemiSky: C(0xd0e0ff), hemiGround: C(0x9a9060), hemiI: 1.3 }],
   [18.3, { top: C(0x3a5ab0), mid: C(0xe89070), bot: C(0xffc070), sun: C(0xffa060), sunI: 1.6, hemiSky: C(0xc0a0c0), hemiGround: C(0x7a5a40), hemiI: 1.1 }],
-  [19.6, { top: C(0x1a2a6a), mid: C(0x5a4a8a), bot: C(0xa06a8a), sun: C(0x8a90d0), sunI: 0.6, hemiSky: C(0x5a5a9a), hemiGround: C(0x2a2a3a), hemiI: 0.95 }],
-  [21, { top: C(0x0a1030), mid: C(0x1a2a5a), bot: C(0x2a3a6a), sun: C(0x6a80c0), sunI: 0.35, hemiSky: C(0x3a4a8a), hemiGround: C(0x1a2030), hemiI: 0.9 }],
+  [19.6, { top: C(0x1a2a6a), mid: C(0x5a4a8a), bot: C(0xa06a8a), sun: C(0x9aa0d8), sunI: 0.8, hemiSky: C(0x6a6aa8), hemiGround: C(0x3a3040), hemiI: 1.2 }],
+  [21, { top: C(0x0a1030), mid: C(0x1a2a5a), bot: C(0x2a3a6a), sun: C(0x8a9ad8), sunI: 0.7, hemiSky: C(0x5a6aa8), hemiGround: C(0x2a3040), hemiI: 1.25 }],
 ];
 
 function skyAt(h: number): Sky {
@@ -256,7 +256,7 @@ export class Stage {
     const a = ((h - 6) / 12) * Math.PI;
     const day = h > 5.5 && h < 19.5;
     const ang = day ? a : a + Math.PI;
-    this.sunDir.set(Math.cos(ang) * 0.75, Math.max(0.25, Math.sin(ang)) * 0.9 + 0.2, 0.45).normalize();
+    this.sunDir.set(Math.cos(ang) * 0.9, 0.5 + Math.max(0, Math.sin(ang)) * 0.45, 0.62).normalize();
     this.night.value = h < 5 || h > 20.5 ? 1 : h < 7 ? 1 - (h - 5) / 2 : h > 18.5 ? (h - 18.5) / 2 : 0;
     const fog = this.scene.fog as THREE.Fog;
     fog.color.copy(this.skyU.uBot.value).lerp(this.skyU.uMid.value, 0.4);

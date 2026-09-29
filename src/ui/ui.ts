@@ -77,7 +77,8 @@ export class UI {
     const m = d.getMinutes();
     const ampm = h < 12 ? "오전" : "오후";
     const hh = h % 12 === 0 ? 12 : h % 12;
-    const w = { sun: "☀️", cloud: "⛅", rain: "🌧️", snow: "❄️", storm: "⛈️" }[weather] ?? "☀️";
+    const night = h < 5 || h >= 19;
+    const w = weather === "sun" && night ? "🌙" : ({ sun: "☀️", cloud: "⛅", rain: "🌧️", snow: "❄️", storm: "⛈️" }[weather] ?? "☀️");
     const html = `<b>${ampm} ${hh}:${String(m).padStart(2, "0")}</b><span>${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEK[d.getDay()]}) ${w}</span><i>${place}</i>`;
     if (this.clockEl.innerHTML !== html) this.clockEl.innerHTML = html;
   }
