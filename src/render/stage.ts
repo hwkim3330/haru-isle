@@ -264,7 +264,7 @@ export class Stage {
 
   /** Keep the camera behind and above the focus, easing after it. */
   updateCamera(dt: number): void {
-    const dist = 15 * this.zoom;
+    const dist = 15 * this.zoom * (this.camera.aspect < 1 ? 1.45 : 1);
     const pitch = 0.78;
     const back = new THREE.Vector3(Math.sin(this.camYaw), 0, Math.cos(this.camYaw));
     const want = this.focus.clone().addScaledVector(back, Math.cos(pitch) * dist).add(new THREE.Vector3(0, Math.sin(pitch) * dist, 0));
