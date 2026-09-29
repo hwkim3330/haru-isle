@@ -1,0 +1,23 @@
+{
+  "name": "haru-isle",
+  "private": true,
+  "version": "0.1.0",
+  "description": "하루섬 — a cozy island-life sim in the browser: a generated island, animal neighbours with their own days, fishing, bugs, digging, crafting, a shop and a museum, and friends visiting peer-to-peer.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "peerjs": "1.5.5",
+    "three": "0.186.0"
+  },
+  "devDependencies": {
+    "@types/three": "0.186.0",
+    "playwright": "1.62.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1"
+  }
+}

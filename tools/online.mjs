@@ -1,0 +1,30 @@
+// Two browsers: one opens the island, the other flies in by code; both act and see each other.
+import { chromium } from "playwright";
+const base = process.env.G_URL ?? "http://localhost:5471/";
+const browser = await chromium.launch({ headless: true, args: ["--use-angle=vulkan", "--enable-features=Vulkan", "--ignore-gpu-blocklist", "--mute-audio"] });
+const errs = [];
+const mk = async (url) => { const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } }); const p = await ctx.newPage(); p.on("pageerror", (e) => errs.push(e.message)); p.on("console", (m) => m.type() === "error" && errs.push(m.text())); await p.goto(url); return p; };
+const host = await mk(base + "?quick&fresh&seed=7&t=2026-04-06T11:00&name=호스트");
+await host.waitForFunction(() => window.__g?.game, null, { timeout: 60000 });
+await host.waitForTimeout(1500);
+await host.evaluate(() => window.__g.game.phone.hostIsland());
+const code = await host.waitForFunction(() => window.__g.game.net?.code && document.getElementById("talk").innerText.includes("코드") ? window.__g.game.net.code : null, null, { timeout: 30000 }).then((h) => h.jsonValue());
+console.log("code", code);
+await host.keyboard.press("Space"); await host.waitForTimeout(300); await host.keyboard.press("Space"); await host.waitForTimeout(300); await host.keyboard.press("Space");
+const guest = await mk(base + `?join=${code}&t=2026-04-06T11:00`);
+await guest.waitForFunction(() => window.__g?.game, null, { timeout: 40000 });
+await guest.waitForTimeout(3000);
+const hs = await host.evaluate(() => ({ remotes: [...window.__g.game.net.remotes.values()].map((r) => r.name), pos: window.__g.game.player.pos }));
+const gs = await guest.evaluate(() => ({ remotes: [...window.__g.game.net.remotes.values()].map((r) => r.name), island: window.__g.game.island.name, npcs: window.__g.game.villagers.list.length }));
+console.log("host sees", hs.remotes, "guest sees", gs);
+// Guest walks next to the host and digs a hole; host should see it.
+await guest.evaluate(([x, z]) => { const g = window.__g.game; g.player.pos.set(x + 1.5, g.world.groundY(x + 1.5, z), z); }, [hs.pos.x, hs.pos.z]);
+const dig = await guest.evaluate(async () => { const g = window.__g.game; g.equip(g.pockets.firstTool("shovel")); const P = g.player; for (let k = 0; k < 40; k++) { const x = Math.floor(P.pos.x) + ((k % 7) - 3), z = Math.floor(P.pos.z) + Math.floor(k / 7) - 3; if (g.world.freeTile(x, z)) { const r = await g.doOp({ op: "dig", x, z, power: false }); return [x, z, r.ok]; } } });
+await host.waitForTimeout(800);
+const seen = await host.evaluate(([x, z]) => JSON.stringify(window.__g.game.world.obj(x, z)), dig);
+console.log("guest dug", dig, "host sees", seen);
+await guest.waitForTimeout(500);
+await host.screenshot({ path: "shots/o-host.png" });
+await guest.screenshot({ path: "shots/o-guest.png" });
+console.log("errors", errs.slice(0, 6));
+await browser.close();
