@@ -12,7 +12,7 @@ import { Animator } from "../char/anim";
 import { clock } from "../core/clock";
 import { rng } from "../core/noise";
 import { FLOORS, item, josa, WALLS } from "../data/items";
-import { at, box, merge, type Part } from "../render/geo";
+import { at, blob, box, cyl, merge, rbox, type Part } from "../render/geo";
 import { FURN_BY_ID, FURNITURE, furnGeometry } from "../render/furniture";
 import { mat } from "../render/stage";
 import { bugModel, fishModel } from "../render/critters";
@@ -206,48 +206,61 @@ export class Interiors {
     const bugs = donated.filter((d) => d.startsWith("bug:"));
     const fossils = donated.filter((d) => d.startsWith("fossil:"));
     const P: Part[] = [];
-    // Left wall: fish tanks; right wall: bug cases; middle: fossil stands.
+    // Left wall: framed aquarium tanks with sand, weed and stones; right wall: glass-domed bug
+    // cases on pedestals; middle: fossil plinths with brass plaques; a runner carpet down the hall.
     for (let k = 0; k < 4; k++) {
-      P.push(at(box(1.8, 0.5, 0.9, 0x6a5a4a), [0.9, 0.25, 1.5 + k * 1.8]));
-      P.push(at(box(1.78, 1.0, 0.88, 0x7ac8e8), [0.9, 1.0, 1.5 + k * 1.8]));
+      const z = 1.5 + k * 1.8;
+      P.push(at(rbox(1.9, 0.55, 1.0, 0.04, 0x6a4a34), [0.95, 0.28, z]));
+      P.push(at(box(1.8, 0.1, 0.9, 0xe8d8a8), [0.95, 0.6, z]));
+      for (let j = 0; j < 3; j++) P.push(at(cyl(0.015, 0.02, 0.4 + j * 0.1, 0x3a9a4a, 5), [0.4 + j * 0.5, 0.8 + j * 0.05, z - 0.25 + (j % 2) * 0.3], [0.1 * j, 0, 0.15 * (j - 1)]));
+      P.push(at(blob(0.12, 0x9a9aa0, 0.2, k, 1), [1.4, 0.68, z + 0.2], [0, 0, 0], [1.2, 0.6, 1]));
+      for (const [x, zz] of [[0.05, -0.45], [1.85, -0.45], [0.05, 0.45], [1.85, 0.45]] as [number, number][]) P.push(at(box(0.06, 1.05, 0.06, 0x3a3a40), [x, 1.05, z + zz]));
+      P.push(at(box(1.9, 0.06, 1.0, 0x3a3a40), [0.95, 1.58, z]));
       r.solid.add(this.key(0, 1 + k * 2)).add(this.key(1, 1 + k * 2)).add(this.key(0, 2 + k * 2)).add(this.key(1, 2 + k * 2));
-      P.push(at(box(1.2, 0.8, 0.8, 0x4a3a2a), [11.2, 0.4, 1.5 + k * 1.8]));
-      P.push(at(box(1.18, 0.5, 0.78, 0xe8f0e0), [11.2, 1.05, 1.5 + k * 1.8]));
+      P.push(at(cyl(0.18, 0.22, 0.8, 0xe8e0d0, 12), [11.1, 0.4, z]));
+      P.push(at(cyl(0.3, 0.3, 0.06, 0x8a6a4a, 16), [11.1, 0.83, z]));
       r.solid.add(this.key(10, 1 + k * 2)).add(this.key(11, 1 + k * 2)).add(this.key(10, 2 + k * 2)).add(this.key(11, 2 + k * 2));
     }
     for (let k = 0; k < 6; k++) {
       const x = 3.5 + (k % 3) * 2.5;
       const z = 3.5 + Math.floor(k / 3) * 2.5;
-      P.push(at(box(1.1, 0.3, 1.1, 0xd8d4cc), [x, 0.15, z]));
+      P.push(at(rbox(1.2, 0.35, 1.2, 0.05, 0xd8d4cc), [x, 0.18, z]));
+      P.push(at(rbox(1.0, 0.06, 1.0, 0.03, 0x5a6a8a), [x, 0.38, z]));
+      P.push(at(box(0.4, 0.14, 0.03, 0xd8b050), [x, 0.3, z + 0.61], [-0.3, 0, 0]));
       r.solid.add(this.key(Math.floor(x), Math.floor(z)));
     }
+    P.push(at(box(2.2, 0.02, 8.0, 0x8a3a4a), [6, 0.01, 4.8]));
+    for (let k = 0; k < 2; k++) P.push(at(box(2.3, 0.021, 0.1, 0xd8b050), [6, 0.012, 0.85 + k * 7.9]));
     const m = new THREE.Mesh(merge(P), M);
     m.receiveShadow = true;
     r.group.add(m);
-    const glass = new THREE.MeshBasicMaterial({ color: 0x9ad8f0, transparent: true, opacity: 0.25 });
+    const glass = new THREE.MeshBasicMaterial({ color: 0x7ac8f0, transparent: true, opacity: 0.3, depthWrite: false });
     for (let k = 0; k < 4; k++) {
-      const tank = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.0, 0.9), glass);
-      tank.position.set(0.9, 1.0, 1.5 + k * 1.8);
+      const tank = new THREE.Mesh(new THREE.BoxGeometry(1.78, 0.95, 0.88), glass);
+      tank.position.set(0.95, 1.1, 1.5 + k * 1.8);
       r.group.add(tank);
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.27, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xe8f4ff, transparent: true, opacity: 0.25, depthWrite: false }));
+      dome.position.set(11.1, 0.86, 1.5 + k * 1.8);
+      r.group.add(dome);
     }
     fish.slice(0, 16).forEach((id, k) => {
       const f = new THREE.Mesh(fishModel(item(id).critter!), M);
-      f.position.set(0.5 + (k % 2) * 0.8, 0.8 + ((k >> 1) % 2) * 0.35, 1.2 + Math.floor(k / 4) * 1.8 + ((k >> 1) % 2) * 0.3);
+      f.position.set(0.5 + (k % 2) * 0.8, 0.95 + ((k >> 1) % 2) * 0.3, 1.3 + Math.floor(k / 4) * 1.8 + ((k >> 1) % 2) * 0.3);
       f.rotation.y = Math.PI / 2;
       f.userData.swim = k;
       r.group.add(f);
     });
     bugs.slice(0, 16).forEach((id, k) => {
       const b = new THREE.Mesh(bugModel(item(id).critter!), M);
-      b.position.set(10.8 + (k % 2) * 0.6, 1.0, 1.25 + Math.floor(k / 2) * 0.9);
-      b.scale.setScalar(1.8);
+      b.position.set(11.1 + ((k % 4) - 1.5) * 0.08, 0.9, 1.5 + Math.floor(k / 4) * 1.8 + ((k % 4) - 1.5) * 0.09);
+      b.scale.setScalar(1.3);
       r.group.add(b);
     });
     fossils.slice(0, 6).forEach((id, k) => {
       const x = 3.5 + (k % 3) * 2.5;
       const z = 3.5 + Math.floor(k / 3) * 2.5;
       const f = new THREE.Mesh(fossilModel(id), M);
-      f.position.set(x, 0.3, z);
+      f.position.set(x, 0.42, z);
       f.castShadow = true;
       r.group.add(f);
     });
