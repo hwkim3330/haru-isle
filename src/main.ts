@@ -113,7 +113,7 @@ function start(profile: Profile, island: IslandSave, guest = false): Game {
     stage.scene.remove(demo.world.group);
     demo = null;
   }
-  stage.zoom = 1;
+  stage.zoom = 1.12;
   ui.innerHTML = "";
   const g = new Game(stage, profile, island, { guest });
   window.__g = { ready: true, game: g, stage, lib: { Person, makeVillager, playerLook, SPECIES } };

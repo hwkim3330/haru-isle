@@ -491,6 +491,7 @@ export class Villagers {
     n.talking = true;
     n.p.anim.talking = true;
     n.p.setHold("none");
+    g.talkFocus = n.p.pos;
     g.player.yaw = Math.atan2(n.p.pos.x - g.player.pos.x, n.p.pos.z - g.player.pos.z);
     sfx("open");
     const pitch = { easy: 0.8, sporty: 0.95, grumpy: 0.7, kind: 1.15, peppy: 1.35, prim: 1.1, dreamy: 1.05, sis: 1.0 }[n.v.temper];
@@ -498,6 +499,7 @@ export class Villagers {
     const say = (lines: string[], choices?: string[]) => g.ui.say(n.v.name, lines, { choices, color, pitch });
     if (n === this.camperNpc) {
       await this.talkCamper(n, say);
+      g.talkFocus = null;
       n.talking = false;
       n.p.anim.talking = false;
       return;
@@ -551,6 +553,7 @@ export class Villagers {
     }
     n.talking = false;
     n.p.anim.talking = false;
+    g.talkFocus = null;
   }
 
   private wantItem(n: NPC): string {

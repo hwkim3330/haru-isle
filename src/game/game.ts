@@ -60,6 +60,9 @@ export class Game {
   private saveT = 0;
   /** Where the player is: "out", or an interior id. */
   where = "out";
+  /** While talking, the camera leans in on the two of you. */
+  talkFocus: THREE.Vector3 | null = null;
+  private baseZoom = 1.12;
   /** Visiting someone else's island (don't save it). */
   guest = false;
 
@@ -549,7 +552,20 @@ export class Game {
     this.world.terrain.update(this.stage.time.value);
     // Camera on the player (or the room).
     if (this.where === "out") {
-      this.stage.focus.lerp(new THREE.Vector3(P.pos.x, P.pos.y, P.pos.z), 1 - Math.exp(-dt * 8));
+      const want = this.talkFocus ? P.pos.clone().lerp(this.talkFocus, 0.5) : P.pos;
+      const z = this.talkFocus ? 0.62 : this.baseZoom;
+      this.stage.zoom += (z - this.stage.zoom) * (1 - Math.exp(-dt * 4));
+      // Swing round so the two of you stand side by side on screen.
+      let yaw = 0;
+      if (this.talkFocus) {
+        const a = Math.atan2(this.talkFocus.x - P.pos.x, this.talkFocus.z - P.pos.z);
+        const c1 = Math.atan2(Math.sin(a - Math.PI / 2), Math.cos(a - Math.PI / 2));
+        const c2 = Math.atan2(Math.sin(a + Math.PI / 2), Math.cos(a + Math.PI / 2));
+        yaw = Math.abs(c1) < Math.abs(c2) ? c1 : c2;
+        yaw = Math.max(-0.6, Math.min(0.6, yaw * 0.5));
+      }
+      this.stage.camYaw += (yaw - this.stage.camYaw) * (1 - Math.exp(-dt * 3));
+      this.stage.focus.lerp(want, 1 - Math.exp(-dt * 8));
       this.stage.updateCamera(dt);
     } else this.interiors.camera(dt);
     music(hour, this.island.seed, wx.kind === "rain" || wx.kind === "storm", this.where !== "out");
