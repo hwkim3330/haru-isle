@@ -143,6 +143,8 @@ export class Stage {
   readonly focus = new THREE.Vector3();
   zoom = 1;
   camYaw = 0;
+  /** 0 normal … 1 looking up at the sky. */
+  lookUp = 0;
   private camPos = new THREE.Vector3();
 
   constructor(canvas: HTMLCanvasElement) {
@@ -212,13 +214,17 @@ export class Stage {
           // Moon opposite the sun at night, and stars.
           float m = max(0.0, dot(d, normalize(vec3(-uSun.x, abs(uSun.y) + 0.3, -uSun.z))));
           c += vec3(0.9, 0.95, 1.0) * smoothstep(0.9985, 0.9992, m) * uNight;
-          vec2 g = vec2(atan(d.z, d.x) * 60.0, y * 90.0);
-          float st = step(0.985, h21(floor(g))) * smoothstep(0.1, 0.4, y) * (0.6 + 0.4 * sin(uTime * 2.0 + h21(floor(g)) * 40.0));
-          c += vec3(st) * uNight;
+          vec2 g = vec2(atan(d.z, d.x) * 80.0, y * 110.0);
+          vec2 cellId = floor(g);
+          float hs = h21(cellId);
+          vec2 off = vec2(h21(cellId + 7.0), h21(cellId + 13.0)) - 0.5;
+          float r = length(fract(g) - 0.5 - off * 0.6);
+          float st = step(0.93, hs) * (1.0 - smoothstep(0.03, 0.09 + 0.06 * fract(hs * 17.0), r)) * smoothstep(0.05, 0.3, y) * (0.65 + 0.35 * sin(uTime * 2.0 + hs * 40.0));
+          c += vec3(1.0, 0.97, 0.88) * st * uNight;
           // Soft clouds.
           vec2 q = d.xz / max(0.15, y) * 0.8 + vec2(uTime * 0.004, 0.0);
           float cl = smoothstep(0.55, 0.8, fract(sin(dot(floor(q * 2.0), vec2(12.9, 78.2))) * 43758.5) * 0.0 + (sin(q.x * 3.1) * sin(q.y * 2.3 + q.x) * 0.5 + 0.5) * (sin(q.x * 7.3 + 1.0) * 0.25 + 0.75));
-          c = mix(c, mix(vec3(1.0), uBot, 0.35), cl * smoothstep(0.03, 0.2, y) * 0.55);
+          c = mix(c, mix(vec3(1.0), uBot, 0.35) * mix(1.0, 0.35, uNight), cl * smoothstep(0.03, 0.2, y) * mix(0.55, 0.25, uNight));
           gl_FragColor = vec4(c, 1.0);
         }`,
     });
@@ -264,14 +270,14 @@ export class Stage {
 
   /** Keep the camera behind and above the focus, easing after it. */
   updateCamera(dt: number): void {
-    const dist = 15 * this.zoom * (this.camera.aspect < 1 ? 1.45 : 1);
-    const pitch = 0.78;
+    const dist = 15 * this.zoom * (this.camera.aspect < 1 ? 1.45 : 1) * (1 - this.lookUp * 0.4);
+    const pitch = 0.78 - this.lookUp * 0.7;
     const back = new THREE.Vector3(Math.sin(this.camYaw), 0, Math.cos(this.camYaw));
     const want = this.focus.clone().addScaledVector(back, Math.cos(pitch) * dist).add(new THREE.Vector3(0, Math.sin(pitch) * dist, 0));
     if (this.camPos.lengthSq() === 0) this.camPos.copy(want);
     this.camPos.lerp(want, 1 - Math.exp(-dt * 6));
     this.camera.position.copy(this.camPos);
-    this.camera.lookAt(this.focus.x, this.focus.y + 0.6, this.focus.z);
+    this.camera.lookAt(this.focus.x, this.focus.y + 0.6 + this.lookUp * 6, this.focus.z - this.lookUp * 8);
     // Sun shadow box on the focus, snapped to texels.
     const t = this.focus;
     const step = 68 / 2048;

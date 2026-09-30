@@ -209,6 +209,7 @@ export class Services {
       } else total = sellOne(slots[k - 1][1]);
       g.pockets.onChange?.();
       sfx("coin");
+      if (total > 0) g.tasks.did("sell");
       g.ui.toast(`도토리 ${total.toLocaleString()}개를 받았다!`);
     }
   }
@@ -279,8 +280,8 @@ export class Services {
   async office(): Promise<void> {
     const g = this.g;
     const say = (l: string[], c?: string[]) => g.ui.say("카피", l, { choices: c, color: "#5ab8e8", pitch: 0.7 });
-    let k = await say([`${g.island.name} 섬 사무소예요~ 느긋하게 도와드릴게요…`], ["공작대 쓰기", "도토리 맡기기", "섬 소식", "그만"]);
-    while (k >= 0 && k < 3) {
+    let k = await say([`${g.island.name} 섬 사무소예요~ 느긋하게 도와드릴게요…`], ["공작대 쓰기", "도토리 맡기기", "섬 소식", "집 넓히기", "그만"]);
+    while (k >= 0 && k < 4) {
       if (k === 0) await this.craft();
       else if (k === 1) await this.bank(say);
       else if (k === 2) {
@@ -293,9 +294,25 @@ export class Services {
         lines.push(`섬 과일은 ${item(g2.world.I.fruit).name}, 섬 꽃은 ${item(`flower:${g2.world.I.flower}:0`).name.split(" ")[1]}예요.`);
         await say(lines);
       }
-      k = await say(["또 필요한 게 있으세요~?"], ["공작대 쓰기", "도토리 맡기기", "섬 소식", "그만"]);
+      if (k === 3) await this.bigger(say);
+      k = await say(["또 필요한 게 있으세요~?"], ["공작대 쓰기", "도토리 맡기기", "섬 소식", "집 넓히기", "그만"]);
     }
     await say(["그럼 느긋하게~"]);
+  }
+
+  private async bigger(say: (l: string[], c?: string[]) => Promise<number>): Promise<void> {
+    const g = this.g;
+    const h = g.profile.home;
+    const next = h.size < 8 ? 8 : h.size < 10 ? 10 : 0;
+    if (!next) return void (await say(["집이 이미 제일 넓어요~ 대단해요."]));
+    const price = next === 8 ? 30000 : 80000;
+    const c = await say([`집을 ${next}×${next}칸으로 넓힐까요? 도토리 ${price.toLocaleString()}개예요~`], ["넓혀 주세요", "다음에요"]);
+    if (c !== 0) return;
+    if (g.pockets.money < price) return void (await say(["도토리가 조금 모자라요~ 모아서 다시 와요."]));
+    g.pockets.money -= price;
+    h.size = next;
+    sfx("fanfare");
+    await say(["뚝딱뚝딱… 짜잔! 집이 넓어졌어요~"]);
   }
 
   private async bank(say: (l: string[], c?: string[]) => Promise<number>): Promise<void> {
@@ -346,6 +363,7 @@ export class Services {
           for (const [m, n] of req) g.pockets.take(m, n);
           g.pockets.add(id);
           sfx("fanfare");
+          g.tasks.did("craft");
           g.ui.toast(`${josa(item(id).name, "을를")} 만들었다!`, id);
           return false;
         },

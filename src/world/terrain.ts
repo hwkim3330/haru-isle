@@ -263,13 +263,19 @@ export class Terrain {
             float n = vnoise(vWPos.xz * 1.3);
             float n2 = fbm2(vWPos.xz * 0.11);
             float up = vWN.y;
-            // Grass: two tones in broad patches, little dark tufts.
+            // Grass: two tones in broad patches, and a scatter of little blade marks (a light
+            // tip over a dark stroke) on a jittered grid, the way painted lawns look.
             vec3 grass = mix(uGrassA, uGrassB, smoothstep(0.35, 0.7, n2));
-            vec2 tc = vWPos.xz * 2.3;
-            vec2 tf = fract(tc) - 0.5;
-            float th = hash12(floor(tc));
-            float tuft = step(0.74, th) * (1.0 - smoothstep(0.03, 0.07, abs(tf.x + tf.y * 0.35))) * (1.0 - smoothstep(0.05, 0.2, abs(tf.y)));
-            grass *= 1.0 - tuft * 0.14;
+            grass *= 0.96 + 0.08 * vnoise(vWPos.xz * 0.45 + 7.0);
+            vec2 tc = vWPos.xz * 2.6;
+            vec2 cell = floor(tc);
+            vec2 jit = vec2(hash12(cell), hash12(cell + 17.3)) - 0.5;
+            vec2 tf = fract(tc) - 0.5 - jit * 0.5;
+            float th = hash12(cell + 3.1);
+            float blade = step(0.45, th) * (1.0 - smoothstep(0.035, 0.06, abs(tf.x + tf.y * 0.28))) * (1.0 - smoothstep(0.06, 0.2, abs(tf.y)));
+            float tip = step(0.45, th) * (1.0 - smoothstep(0.03, 0.05, abs(tf.x + (tf.y + 0.08) * 0.28))) * (1.0 - smoothstep(0.02, 0.07, abs(tf.y + 0.12)));
+            grass *= 1.0 - blade * 0.16;
+            grass = mix(grass, grass * 1.18 + 0.02, tip * 0.6);
             float sandM = smoothstep(0.45, 0.58, T.r + (n - 0.5) * 0.3);
             float wetSand = 1.0 - smoothstep(0.0, 0.35, texture2D(uCoast, tuv).g * 8.0 / 30.0 * 3.0);
             vec3 sand = mix(vec3(0.96, 0.89, 0.70), vec3(0.93, 0.84, 0.64), n);
@@ -291,11 +297,20 @@ export class Terrain {
             vec3 plank = vec3(0.62, 0.45, 0.30) * (0.88 + 0.12 * hash12(vec2(floor(vWPos.x * 3.0), 0.0)));
             plank *= 1.0 - smoothstep(0.44, 0.5, abs(fract(vWPos.x * 3.0) - 0.5)) * 0.3;
             col = mix(col, plank, smoothstep(0.42, 0.55, P.a + pe));
-            // Cliffs: layered earth and stone.
+            // Cliffs: layered earth and stone, lighter under the lip, darker at the foot, and a
+            // lighter rim of grass where the top rolls over the edge.
             float cl = 1.0 - smoothstep(0.42, 0.7, up);
+            float lvl = fract((vWPos.y + 0.02) / ${TIER_H.toFixed(3)});
             float band = step(0.5, fract(vWPos.y * 2.4 + n * 0.5));
-            vec3 rock = mix(vec3(0.62, 0.50, 0.40), vec3(0.52, 0.42, 0.34), band) * (0.92 + 0.08 * n);
+            vec3 rock = mix(vec3(0.66, 0.53, 0.42), vec3(0.56, 0.45, 0.36), band) * (0.92 + 0.08 * n);
+            rock *= mix(0.78, 1.08, smoothstep(0.0, 0.85, lvl));
+            rock = mix(rock, rock * 0.8, smoothstep(0.8, 0.96, lvl));
             col = mix(col, rock, cl);
+            float lip = smoothstep(0.62, 0.72, up) * (1.0 - smoothstep(0.85, 0.95, up));
+            col = mix(col, col * 1.12 + vec3(0.03, 0.04, 0.0), lip * (1.0 - sandM) * 0.8);
+            // River and pond banks: damp earth down to the water.
+            float bank = smoothstep(0.08, 0.35, T.g) * (1.0 - smoothstep(0.55, 0.85, up)) * (1.0 - cl * 0.5);
+            col = mix(col, vec3(0.55, 0.47, 0.36) * (0.9 + 0.2 * n), bank * 0.85);
             // Under water: a pale bed.
             float bed = smoothstep(0.35, 0.7, T.g) * smoothstep(0.15, -0.25, vWPos.y - floor(vWPos.y + 0.5));
             col = mix(col, vec3(0.62, 0.66, 0.55), bed * 0.7);
@@ -418,9 +433,9 @@ export class Terrain {
         void main() {
           vec2 tuv = vW.xz / vec2(${W}.0, ${H}.0);
           float wet = texture2D(uTiles, tuv).g;
-          vec3 c = mix(vec3(0.45, 0.82, 0.86), vec3(0.25, 0.62, 0.80), smoothstep(0.6, 1.0, wet));
+          vec3 c = mix(vec3(0.38, 0.76, 0.86), vec3(0.18, 0.54, 0.78), smoothstep(0.6, 1.0, wet));
           float r = vnoise(vW.xz * 2.2 + vec2(uTime * 0.6, uTime * 0.35)) * vnoise(vW.xz * 3.1 - vec2(uTime * 0.4, -uTime * 0.2));
-          c += vec3(1.0) * smoothstep(0.34, 0.42, r) * 0.28;
+          c += vec3(0.85, 0.95, 1.0) * smoothstep(0.34, 0.42, r) * 0.22;
           float edge = 1.0 - smoothstep(0.55, 0.85, wet + (vnoise(vW.xz * 4.0 + uTime) - 0.5) * 0.2);
           c = mix(c, vec3(0.92, 0.98, 1.0), edge * 0.45);
           c *= mix(1.0, 0.3, uNight);

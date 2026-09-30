@@ -15,6 +15,7 @@ import type { Game } from "./game";
 import { save } from "./save";
 
 const APPS: [string, string, string][] = [
+  ["tasks", "오늘의 할 일", "📮"],
   ["guide", "도감", "🐟"],
   ["recipes", "레시피", "📜"],
   ["map", "지도", "🗺️"],
@@ -41,6 +42,7 @@ export class Phone {
       { foot: this.designing ? `섬 디자인 중: ${["", "흙길", "돌길", "벽돌길", "나무길"][this.designing]}` : "" },
     );
     const app = APPS[k]?.[0];
+    if (app === "tasks") await g.ui.menu("오늘의 할 일 (하루 도장)", g.tasks.rows(), { foot: "다섯 개를 모두 하면 선물!" });
     if (app === "guide") await this.guide();
     if (app === "recipes") await this.recipes();
     if (app === "map") await this.map();

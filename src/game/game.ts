@@ -12,7 +12,7 @@ import { clock } from "../core/clock";
 import { item, josa } from "../data/items";
 import { setNight } from "../render/buildings";
 import { PLAYER_U, type Stage } from "../render/stage";
-import { DX, DZ, idx, TIER_H } from "../world/island";
+import { DX, DZ, H, idx, K, TIER_H, W } from "../world/island";
 import { UI } from "../ui/ui";
 import { Critters } from "./critters";
 import { Fx } from "./fx";
@@ -28,6 +28,9 @@ import { Interiors } from "./interiors";
 import { Services } from "./services";
 import { Phone } from "./phone";
 import type { Net } from "../net/net";
+import { Meteors } from "./sky";
+import { Tasks } from "./tasks";
+
 
 export interface Action {
   label: string;
@@ -47,6 +50,8 @@ export class Game {
   readonly interiors: Interiors;
   readonly services: Services;
   readonly phone: Phone;
+  readonly meteors: Meteors;
+  readonly tasks: Tasks;
   net: Net | null = null;
   /** Pocket slot of the item in hand (tool), or -1. */
   held = -1;
@@ -83,6 +88,8 @@ export class Game {
     this.interiors = new Interiors(this);
     this.services = new Services(this);
     this.phone = new Phone(this);
+    this.meteors = new Meteors(this);
+    this.tasks = new Tasks(this);
     this.player = new Person(stage.scene, this.lookFor(profile), profile.name);
     const [sx, sz] = this.homeSpawn();
     this.player.pos.set(sx, this.world.groundY(sx, sz), sz);
@@ -182,11 +189,26 @@ export class Game {
 
   /** Run an op on the island: locally if we own it, through the host if visiting. */
   doOp(op: Op, quiet = false): Promise<OpResult> {
-    if (this.net && !this.net.isHost) return this.net.request(op).then((r) => (this.applyResult(r, quiet), r));
+    if (this.net && !this.net.isHost) return this.net.request(op).then((r) => (this.applyResult(r, quiet), this.deeds(op, r), r));
     const r = applyOp(this.world, op);
     this.net?.broadcastSet(r.set);
     this.applyResult(r, quiet);
+    this.deeds(op, r);
     return Promise.resolve(r);
+  }
+
+  /** Count what an op did toward today's stamps. */
+  deeds(op: Op, r: OpResult): void {
+    if (!r.ok) return;
+    if (op.op === "shake") this.tasks.did("shake");
+    if (op.op === "rock") this.tasks.did("rock");
+    if (op.op === "water" && r.fx === "water") this.tasks.did("water");
+    if (op.op === "plant") this.tasks.did("plant");
+    if (op.op === "dig" && r.fx === "dig") this.tasks.did("dig");
+    for (const [id] of r.give) {
+      if (id === "weed") this.tasks.did("weed");
+      if (id.startsWith("shell")) this.tasks.did("shell");
+    }
   }
 
   applyResult(r: OpResult, quiet = false): void {
@@ -202,7 +224,11 @@ export class Game {
     const at = new THREE.Vector3(e.x + 0.5, this.world.groundY(e.x + 0.5, e.z + 0.5), e.z + 0.5);
     if (e.kind === "shake") this.fx.emit("leaf", at.clone().add(new THREE.Vector3(0, 2, 0)), 8, { spread: 1.6, up: 0.5, grav: 1.5, life: 1.3, size: 0.2 });
     if (e.kind === "fell") this.fx.emit("puff", at.clone().add(new THREE.Vector3(0, 0.5, 0)), 10, { spread: 1, up: 1, grav: -0.5, life: 0.8, size: 0.5 });
-    if (e.kind === "rockhit") this.fx.emit("spark", at.clone().add(new THREE.Vector3(0, 0.5, 0)), 4, { spread: 0.4, up: 2, life: 0.4, size: 0.15 });
+    if (e.kind === "rockhit") {
+      this.fx.emit("spark", at.clone().add(new THREE.Vector3(0, 0.5, 0)), 4, { spread: 0.4, up: 2, life: 0.4, size: 0.15 });
+      if (Math.random() < 0.15) this.critters.spawnAt("rock", at.clone().add(new THREE.Vector3(0.4, 0, 0.4)));
+    }
+    if (e.kind === "shake" && this.player.anim.act === "shake" && Math.random() < 0.18) this.critters.spawnAt("shake", at);
     if (e.kind === "rockbreak") this.fx.emit("puff", at.clone().add(new THREE.Vector3(0, 0.3, 0)), 14, { spread: 1, up: 1.5, grav: 1, life: 0.9, size: 0.5, color: 0xaaaaaa });
     if (e.kind === "wasps") this.critters.wasps(at);
   }
@@ -435,6 +461,7 @@ export class Game {
         run: () => {
           this.pockets.takeAt(i);
           this.profile.power = Math.min(10, this.profile.power + 1);
+          this.tasks.did("eat");
           this.player.play("eat");
           sfx("joy");
           this.ui.toast(`힘이 솟는다! (힘 ${this.profile.power})`);
@@ -501,8 +528,10 @@ export class Game {
     setNight(this.stage.night.value);
     if (!this.guest && this.world.tickDay().length) {
       this.villagers.morning();
+      this.starShards();
       this.persist();
     }
+    this.meteors.update(dt);
     this.ui.setClock(clock.now(), wx.kind, this.guest ? `${this.island.name} (방문 중)` : this.island.name);
     this.ui.setMoney(this.pockets.money);
     if (!modal && !this.busy) this.control(dt, pad);
@@ -542,6 +571,15 @@ export class Game {
       const tools = this.pockets.slots.map((s, i) => (s && item(s.id).tool ? i : -1)).filter((i) => i >= 0);
       if (tools[pad.num] !== undefined) this.equip(tools[pad.num]);
     }
+    if (pad.emote && (this.meteors.tonight() || this.meteors.lookUp > 0.5)) {
+      this.meteors.toggleLook();
+      return;
+    }
+    if (this.meteors.lookUp > 0.5) {
+      this.ui.prompt(this.meteors.tonight() ? "Space: 소원 빌기 · R: 고개 내리기" : "R: 고개 내리기");
+      if (pad.act) this.meteors.wish();
+      return;
+    }
     if (pad.emote) {
       P.play(["wave", "joy", "dance", "bow", "surprise"][Math.floor(Math.random() * 5)] as never);
       this.net?.emote();
@@ -565,6 +603,21 @@ export class Game {
     if (pad.act && act) void act.run();
     else if (pad.pick && pick) void pick.run();
     else if (pad.act && P.tool) void this.swing("swing", null);
+  }
+
+  /** Wishes on last night's shooting stars wash up as star shards on the beach. */
+  private starShards(): void {
+    const n = Math.min(8, this.island.wishes ?? 0);
+    this.island.wishes = 0;
+    const I = this.world.I;
+    for (let k = 0, put = 0; k < 400 && put < n; k++) {
+      const x = Math.floor(Math.random() * W);
+      const z = Math.floor(Math.random() * H);
+      if (I.kind[z * W + x] !== K.Sand || I.seaDist[z * W + x] > 3 || !this.world.freeTile(x, z)) continue;
+      this.world.setObj(x, z, { t: "item", id: "star", n: 1 });
+      put++;
+    }
+    if (n) this.ui.toast("해변에 무언가 반짝이고 있다…");
   }
 
   /** Save profile and (if it's ours) the island. */

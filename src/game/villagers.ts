@@ -509,6 +509,7 @@ export class Villagers {
     if (r.talkedDay !== day) {
       r.talkedDay = day;
       r.friend += 1;
+      g.tasks.did("talk");
       // A birthday!
       if (clock.month() === n.v.birthday[0] && clock.now().getDate() === n.v.birthday[1]) lines.push(this.line(n, "사실 오늘 내 생일이야! 기억해 줄 거지 {c}?"));
     }

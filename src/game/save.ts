@@ -38,6 +38,7 @@ export interface Profile {
   lastDay: number;
   /** Radishes bought this week: [price paid, week key]. */
   radish?: [number, number];
+  tasks?: import("./tasks").DayTasks;
 }
 
 export interface Resident {
@@ -61,6 +62,8 @@ export interface IslandSave {
   museum: string[];
   /** A camper at the campsite today (seed), or none. */
   camper: { seed: number; day: number } | null;
+  /** Wishes made on shooting stars last night (star shards next morning). */
+  wishes?: number;
   created: number;
 }
 

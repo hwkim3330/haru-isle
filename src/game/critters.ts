@@ -27,6 +27,7 @@ interface Bug {
   t: number;
   flee: boolean;
   gone: boolean;
+  drop?: boolean;
 }
 
 interface Fish {
@@ -136,6 +137,23 @@ export class Critters {
     }
   }
 
+  /** A bug that turns up because of something you did: dropped from a shaken tree, out from under a hit rock. */
+  spawnAt(place: BugPlace, at: THREE.Vector3): void {
+    const c = this.pickCritter(BUGS, place);
+    if (!c) return;
+    const mesh = new THREE.Mesh(this.geo(c, false), BUG_MAT);
+    mesh.castShadow = true;
+    this.g.stage.scene.add(mesh);
+    const P = this.g.player.pos;
+    const home = at.clone();
+    if (place === "shake") {
+      // Lands on the ground between the tree and you, then sits a moment.
+      home.lerp(P, 0.45);
+      home.y = this.g.world.groundY(home.x, home.z) + 0.03;
+    }
+    this.bugs.push({ c, mesh, home, pos: at.clone().add(new THREE.Vector3(0, place === "shake" ? 1.6 : 0.1, 0)), t: 0, flee: false, gone: false, drop: place === "shake" } as Bug);
+  }
+
   private fishPlace(x: number, z: number): FishPlace | null {
     const w = this.g.world;
     if (!inside(x, z)) return null;
@@ -223,7 +241,16 @@ export class Critters {
         sfx("swing");
       }
       const flying = ["fly", "night-fly", "light"].includes(b.c.place);
-      if (b.flee) {
+      if (b.drop) {
+        b.pos.lerp(b.home, Math.min(1, dt * 6));
+        if (b.pos.distanceTo(b.home) < 0.02) b.drop = false;
+      } else if (b.c.place === "rock" && !b.flee) {
+        // Pill bugs scuttle off, and vanish after a few seconds.
+        const away = b.pos.clone().sub(P.pos).setY(0).normalize();
+        b.pos.addScaledVector(away, dt * 0.8);
+        b.pos.y = g.world.groundY(b.pos.x, b.pos.z) + 0.02;
+        if (b.t > 6) b.gone = true;
+      } else if (b.flee) {
         const away = b.pos.clone().sub(P.pos).setY(0).normalize();
         b.pos.addScaledVector(away, dt * 5).add(new THREE.Vector3(0, dt * 3, 0));
         if (b.pos.y > b.home.y + 6) b.gone = true;
@@ -328,6 +355,7 @@ export class Critters {
     P.rig.root.add(show);
     P.play("joy");
     sfx("catch");
+    g.tasks.did(isFish ? "fish" : "bug");
     const first = !g.profile.caught.includes(id);
     if (first) g.profile.caught.push(id);
     g.villagers.noteCatch(c.name);
