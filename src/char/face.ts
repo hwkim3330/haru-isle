@@ -38,8 +38,9 @@ function draw(f: FaceDesc, blink: boolean, talk: boolean): HTMLCanvasElement {
   const g = cv.getContext("2d")!;
   const cx = CW / 2;
   const spread = (f.spread ?? 0.42) * 64;
-  const ey = CH * (f.eyeY ?? 0.5);
-  const my = CH * (f.mouthY ?? 0.72);
+  // The camera looks down on everyone, so features sit a little above the equator.
+  const ey = CH * ((f.eyeY ?? 0.5) - 0.08);
+  const my = CH * ((f.mouthY ?? 0.72) - 0.08);
   if (f.mark === "mask") {
     g.fillStyle = hex(f.markColor ?? 0x3a3a3a);
     g.beginPath();

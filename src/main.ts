@@ -4,7 +4,8 @@
  */
 import { unlock } from "./audio/sound";
 import { clock } from "./core/clock";
-import { playerLook } from "./data/species";
+import { makeVillager, playerLook, SPECIES } from "./data/species";
+import { Person } from "./game/player";
 import { Game } from "./game/game";
 import { save, type IslandSave, type Profile } from "./game/save";
 import { Net } from "./net/net";
@@ -115,7 +116,7 @@ function start(profile: Profile, island: IslandSave, guest = false): Game {
   stage.zoom = 1;
   ui.innerHTML = "";
   const g = new Game(stage, profile, island, { guest });
-  window.__g = { ready: true, game: g, stage };
+  window.__g = { ready: true, game: g, stage, lib: { Person, makeVillager, playerLook, SPECIES } };
   let last = performance.now();
   const frame = () => {
     const now = performance.now();

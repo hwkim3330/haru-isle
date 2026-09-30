@@ -4,7 +4,7 @@
  * species; people add hair. Clothes are the torso's colours (plain, striped, two-tone).
  */
 import * as THREE from "three";
-import { at, ball, box, cone, cyl, merge, petal, rbox, type Part } from "../render/geo";
+import { at, ball, box, cone, cyl, merge, petal, rbox, torus, type Part } from "../render/geo";
 import { mat } from "../render/stage";
 import { faceGeometry, makeFace, type Face, type FaceDesc } from "./face";
 
@@ -58,21 +58,72 @@ export interface Rig {
 const MAT = mat(0xffffff, { vertexColors: true, rim: 0.22 });
 const HEAD_R = 0.31;
 
-function torsoParts(L: Look): Part[] {
-  const P: Part[] = [];
-  const bands = 5;
-  for (let k = 0; k < bands; k++) {
-    const y0 = 0.2 + (k / bands) * 0.36;
-    const t = k / bands;
-    const r0 = 0.19 + Math.sin(t * Math.PI) * 0.025;
-    const c = L.pattern === "stripe" ? (k % 2 ? L.shirt2 : L.shirt) : L.pattern === "two" ? (k < 2 ? L.shirt2 : L.shirt) : L.shirt;
-    P.push(at(cyl(r0 - 0.01, r0, 0.36 / bands + 0.002, c, 14), [0, y0 + 0.36 / bands / 2, 0]));
+/** A lathe whose rows are coloured by height (stripes, two-tone shirts). */
+function latheC(profile: [number, number][], color: (y: number, k: number) => number, seg = 20): Part {
+  // Lathe normals face out only when the profile climbs; sort it bottom to top.
+  const pr = [...profile].sort((a, b) => a[1] - b[1]);
+  const g = new THREE.LatheGeometry(pr.map(([r, y]) => new THREE.Vector2(r, y)), seg);
+  g.computeVertexNormals();
+  const out = g.toNonIndexed();
+  out.deleteAttribute("uv");
+  const pos = out.attributes.position as THREE.BufferAttribute;
+  const col = new Float32Array(pos.count * 3);
+  const c = new THREE.Color();
+  for (let i = 0; i < pos.count; i += 3) {
+    // Colour per triangle by its centre height, so bands have crisp edges.
+    const y = (pos.getY(i) + pos.getY(i + 1) + pos.getY(i + 2)) / 3;
+    const x = (pos.getX(i) + pos.getX(i + 1) + pos.getX(i + 2)) / 3;
+    const z = (pos.getZ(i) + pos.getZ(i + 1) + pos.getZ(i + 2)) / 3;
+    c.set(color(y, Math.atan2(x, z)));
+    for (let j = 0; j < 3; j++) col.set([c.r, c.g, c.b], (i + j) * 3);
   }
-  P.push(at(ball(0.2, L.pattern === "two" ? L.shirt2 : L.shirt, 14, 8), [0, 0.22, 0], [0, 0, 0], [1, 0.45, 0.95]));
-  P.push(at(ball(0.185, L.shirt, 14, 8), [0, 0.55, 0], [0, 0, 0], [1, 0.4, 0.95]));
-  if (L.pattern === "dot") for (let k = 0; k < 6; k++) P.push(at(ball(0.03, L.shirt2, 6, 4), [Math.cos(k * 1.3) * 0.15, 0.3 + (k % 3) * 0.08, 0.16], [0, 0, 0], [1, 1, 0.3]));
-  // Neck in fur.
-  P.push(at(cyl(0.09, 0.1, 0.08, L.fur, 10), [0, 0.6, 0]));
+  out.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  return out;
+}
+
+function torsoParts(L: Look): Part[] {
+  // One smooth bean from the hips to the collar.
+  const prof: [number, number][] = [
+    [0.001, 0.16],
+    [0.1, 0.165],
+    [0.165, 0.2],
+    [0.198, 0.27],
+    [0.205, 0.35],
+    [0.196, 0.43],
+    [0.172, 0.51],
+    [0.13, 0.575],
+    [0.09, 0.61],
+    [0.001, 0.625],
+  ];
+  // Rows every 0.0275 so colour bands (hem at 0.2, stripes every 0.055) fall on row edges.
+  const rAt = (y: number) => {
+    for (let k = 0; k < prof.length - 1; k++) {
+      const [r0, y0] = prof[k];
+      const [r1, y1] = prof[k + 1];
+      if (y >= y0 && y <= y1) return r0 + ((r1 - r0) * (y - y0)) / Math.max(1e-6, y1 - y0);
+    }
+    return 0.001;
+  };
+  const dense: [number, number][] = [[0.001, 0.16], [0.1, 0.165], [0.165, 0.2]];
+  for (let y = 0.2 + 0.0275; y < 0.61; y += 0.0275) dense.push([rAt(y), y]);
+  dense.push([0.09, 0.61], [0.001, 0.625]);
+  const shirt = (y: number): number => {
+    if (y < 0.2) return L.pants;
+    if (L.pattern === "stripe") return Math.floor((y - 0.2) / 0.055 + 1e-3) % 2 ? L.shirt2 : L.shirt;
+    if (L.pattern === "two") return y < 0.36 ? L.shirt2 : L.shirt;
+    return L.shirt;
+  };
+  const P: Part[] = [latheC(dense, shirt, 22)];
+  if (L.pattern === "dot")
+    for (let k = 0; k < 11; k++) {
+      const a = (k / 11) * Math.PI * 2 + (k % 2) * 0.3;
+      const y = 0.27 + (k % 3) * 0.085;
+      const r = 0.2 - Math.abs(y - 0.35) * 0.25;
+      P.push(at(ball(0.028, L.shirt2, 8, 6), [Math.sin(a) * r, y, Math.cos(a) * r], [0, a, 0], [1, 1, 0.35]));
+    }
+  // A collar and the neck.
+  P.push(at(torus(0.095, 0.026, new THREE.Color(L.shirt).multiplyScalar(0.86).getHex(), 18), [0, 0.595, 0], [Math.PI / 2, 0, 0]));
+  P.push(at(cyl(0.085, 0.095, 0.08, L.fur, 12), [0, 0.63, 0]));
   return P;
 }
 
@@ -193,16 +244,29 @@ function hairParts(L: Look): Part[] {
   const c = L.hairColor ?? 0x4a3020;
   const R = HEAD_R;
   const P: Part[] = [];
-  // A cap over the crown, and a band round the sides and back that leaves the face open.
-  P.push(at(paintC(new THREE.SphereGeometry(R * 1.07, 20, 8, 0, Math.PI * 2, 0, Math.PI * 0.3), c), [0, 0.01, -0.005]));
-  const gap = Math.PI * 0.85;
-  P.push(at(paintC(new THREE.SphereGeometry(R * 1.065, 20, 8, Math.PI / 2 + gap / 2, Math.PI * 2 - gap, Math.PI * 0.28, Math.PI * 0.3), c), [0, 0.01, -0.005]));
-  P.push(at(paintC(new THREE.SphereGeometry(R * 1.06, 16, 8, Math.PI * 1.5 - Math.PI * 0.4, Math.PI * 0.8, Math.PI * 0.55, Math.PI * 0.25), c), [0, 0, -0.01]));
-  // Bangs.
-  for (let k = 0; k < 5; k++) {
-    const a = (k - 2) * 0.33;
-    P.push(at(ball(0.08, c, 8, 6), [Math.sin(a) * R * 0.85, R * 0.62 - Math.abs(k - 2) * 0.03, Math.cos(a) * R * 0.78], [0.4, 0, a * 0.4], [1.1, 0.8, 0.6]));
+  // One smooth shell over the head. Where the face shows, vertices sink inside the skull,
+  // leaving a fringe of rounded scallops over the brow.
+  const shell = new THREE.SphereGeometry(R * 1.075, 40, 28);
+  const sp = shell.attributes.position as THREE.BufferAttribute;
+  const v = new THREE.Vector3();
+  const bangs = L.hair === "spiky" ? 5 : L.hair === "bob" || L.hair === "long" ? 3 : 4;
+  for (let i = 0; i < sp.count; i++) {
+    v.fromBufferAttribute(sp, i).divideScalar(R * 1.075);
+    const front = v.z;
+    const ang = Math.atan2(v.x, v.z);
+    // The fringe line: lower at the temples, scalloped across the forehead.
+    const scallop = Math.abs(Math.sin(ang * bangs * 1.6 + 0.3)) * 0.1;
+    const fringe = 0.34 + scallop - Math.max(0, Math.abs(ang) - 0.9) * 0.55;
+    const sideburn = L.hair === "bob" || L.hair === "long" ? -0.55 : -0.2;
+    const hideFace = front > -0.1 && v.y < fringe && Math.abs(ang) < 1.25;
+    const hideNape = v.y < (front < -0.2 ? (L.hair === "bob" || L.hair === "long" ? -0.55 : -0.25) : sideburn);
+    let k = 1;
+    if (hideFace || hideNape) k = 0.92;
+    else k = 1 + Math.max(0, v.y) * 0.03;
+    sp.setXYZ(i, v.x * R * 1.075 * k, v.y * R * 1.075 * k, v.z * R * 1.075 * k);
   }
+  shell.computeVertexNormals();
+  P.push(at(paintC(shell, c), [0, 0.012, -0.01]));
   switch (L.hair) {
     case "spiky":
       for (let k = 0; k < 7; k++) P.push(at(cone(0.07, 0.2, c, 5), [Math.cos(k * 0.9) * R * 0.5, R * 0.95, Math.sin(k * 0.9) * R * 0.5 - 0.05], [Math.sin(k * 0.9) * 0.5, 0, -Math.cos(k * 0.9) * 0.5]));
@@ -293,8 +357,11 @@ function colorize(g: THREE.BufferGeometry, c: number): Part {
   return paintC(g, c);
 }
 
-function limb(len: number, r: number, c: number, end: number, endR: number): Part[] {
-  return [at(cyl(r * 0.9, r, len, c, 8), [0, -len / 2, 0]), at(ball(endR, end, 8, 6), [0, -len, 0])];
+function limb(len: number, r: number, c: number, end: number, endR: number, sleeve?: number): Part[] {
+  const P: Part[] = [at(latheC([[0.001, 0.02], [r * 0.9, 0], [r, -len * 0.5], [r * 0.85, -len], [0.001, -len - 0.01]], () => c, 10), [0, 0, 0])];
+  if (sleeve !== undefined) P.push(at(latheC([[r * 1.35, 0.03], [r * 1.45, -len * 0.25], [r * 1.35, -len * 0.5], [r * 1.1, -len * 0.52]], () => sleeve, 12), [0, 0, 0]));
+  P.push(at(ball(endR, end, 12, 8), [0, -len - 0.01, 0.005], [0, 0, 0], [1, 0.95, 1]));
+  return P;
 }
 
 export function buildRig(L: Look): Rig {
@@ -337,7 +404,7 @@ export function buildRig(L: Look): Rig {
     const g = new THREE.Group();
     g.position.set(s * 0.2, 0.53, 0);
     body.add(g);
-    mk(limb(0.2, 0.055, L.pattern === "stripe" ? L.shirt : L.shirt, L.kind === "human" ? L.fur : L.fur, 0.065), g);
+    mk(limb(0.2, 0.042, L.fur, L.fur, 0.062, L.pattern === "stripe" ? L.shirt2 : L.shirt), g);
     g.rotation.z = s * 0.25;
     return g;
   };
@@ -350,7 +417,7 @@ export function buildRig(L: Look): Rig {
     const g = new THREE.Group();
     g.position.set(s * 0.09, 0.2, 0);
     root.add(g);
-    mk([at(cyl(0.06, 0.065, 0.14, L.pants, 8), [0, -0.07, 0]), at(ball(0.075, L.shoes, 10, 6), [0, -0.16, 0.03], [0, 0, 0], [1, 0.6, 1.4])], g);
+    mk([at(latheC([[0.068, 0.02], [0.066, -0.06], [0.058, -0.12], [0.001, -0.13]], () => L.pants, 12), [0, 0, 0]), at(ball(0.078, L.shoes, 14, 10), [0, -0.15, 0.035], [0, 0, 0], [1, 0.62, 1.35])], g);
     return g;
   };
   const legL = leg(1);

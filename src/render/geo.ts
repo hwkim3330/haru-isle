@@ -78,7 +78,7 @@ export function rbox(w: number, h: number, d: number, round: number, c: number, 
 }
 
 /** A lumpy blob (tree canopies, rocks, bushes). */
-export function blob(r: number, c: number, lump = 0.18, seed = 1, detail = 2, jit = 0.08): Part {
+export function blob(r: number, c: number, lump = 0.18, seed = 1, detail = 2, jit = 0): Part {
   const g = new THREE.IcosahedronGeometry(r, detail);
   const p = g.attributes.position as THREE.BufferAttribute;
   const v = new THREE.Vector3();

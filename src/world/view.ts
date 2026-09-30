@@ -114,7 +114,7 @@ export class ObjectView {
       if (m.leaf) {
         leaf = new THREE.InstancedMesh(m.leaf, this.leafMat, cap);
         leaf.castShadow = true;
-        leaf.receiveShadow = true;
+        leaf.receiveShadow = false;
         leaf.frustumCulled = false;
         leaf.count = 0;
         this.group.add(leaf);
@@ -132,7 +132,7 @@ export class ObjectView {
     const re = (old: THREE.InstancedMesh) => {
       const m = new THREE.InstancedMesh(old.geometry, old.material, ncap);
       m.castShadow = old.castShadow;
-      m.receiveShadow = true;
+      m.receiveShadow = old.receiveShadow;
       m.frustumCulled = false;
       this.group.remove(old);
       this.group.add(m);

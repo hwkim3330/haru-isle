@@ -74,7 +74,7 @@ export function treeModel(kind: TreeKind, stage: number, fruit: string | null, s
       const y = H * 0.55 + k * 0.62 * s;
       leaf.push(at(blobCone(r, 0.95 * s + 0.1, k % 2 ? 0x2e8a4e : 0x3a9a58, seed + k), [0, y, 0]));
     }
-    return { base: merge(base), leaf: merge(leaf) };
+    return { base: merge(base), leaf: softCanopy(merge(leaf), new THREE.Vector3(0, 0, 0), 0.6, true) };
   }
   // Hardwood and fruit trees: a round crown of lumps over a short trunk.
   const H = 1.0 * s + 0.1;
@@ -88,7 +88,7 @@ export function treeModel(kind: TreeKind, stage: number, fruit: string | null, s
   const R = 0.95 * s + 0.1;
   const cy = H + R * 0.62;
   const tones = kind === "fruit" ? [0x5ab84a, 0x4aa844] : [0x58b04a, 0x48a042];
-  leaf.push(at(blob(R, tones[0], 0.1, seed, 2), [0, cy, 0], [0, 0, 0], [1, 0.82, 1]));
+  leaf.push(at(blob(R, tones[0], 0.1, seed, 3), [0, cy, 0], [0, 0, 0], [1, 0.82, 1]));
   for (let k = 0; k < 5; k++) {
     const a = (k / 5) * Math.PI * 2 + seed;
     leaf.push(at(blob(R * 0.55, tones[k % 2], 0.12, seed + k, 2), [Math.cos(a) * R * 0.6, cy + (k % 2 ? 0.15 : -0.1) * s, Math.sin(a) * R * 0.6]));
@@ -100,7 +100,37 @@ export function treeModel(kind: TreeKind, stage: number, fruit: string | null, s
       base.push(at(fruitGeo(fruit), [Math.cos(a) * R * 0.78, cy - R * 0.15, Math.sin(a) * R * 0.78 + 0.1], [0, 0, 0], 1.4));
     }
   }
-  return { base: merge(base), leaf: merge(leaf) };
+  return { base: merge(base), leaf: softCanopy(merge(leaf), new THREE.Vector3(0, cy, 0)) };
+}
+
+/**
+ * Soft canopy shading: bend each normal toward "out from the centre of the crown", and warm the
+ * top, so a crown of lumps shades like one fluffy ball instead of many facets.
+ */
+function softCanopy(g: THREE.BufferGeometry, center: THREE.Vector3, amount = 0.72, axisOnly = false): THREE.BufferGeometry {
+  const p = g.attributes.position as THREE.BufferAttribute;
+  const n = g.attributes.normal as THREE.BufferAttribute;
+  const c = g.attributes.color as THREE.BufferAttribute;
+  g.computeBoundingBox();
+  const bb = g.boundingBox!;
+  const v = new THREE.Vector3();
+  const o = new THREE.Vector3();
+  const nn = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i);
+    o.copy(v).sub(center);
+    if (axisOnly) o.y = Math.abs(Math.hypot(o.x, o.z)) * 0.55 + 0.1;
+    else o.y *= 1.25;
+    o.normalize();
+    nn.fromBufferAttribute(n, i).lerp(o, amount).normalize();
+    n.setXYZ(i, nn.x, nn.y, nn.z);
+    const h = (v.y - bb.min.y) / Math.max(1e-3, bb.max.y - bb.min.y);
+    const k = 0.82 + h * 0.3;
+    c.setXYZ(i, c.getX(i) * k, c.getY(i) * k, c.getZ(i) * (0.9 + h * 0.15));
+  }
+  n.needsUpdate = true;
+  c.needsUpdate = true;
+  return g;
 }
 
 function blobCone(r: number, h: number, c: number, seed: number): Part {
